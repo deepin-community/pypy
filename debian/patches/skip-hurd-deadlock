@@ -1,0 +1,25 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sun, 26 Aug 2018 14:26:45 +0100
+Subject: Tests: Skip test that deadlocks on GNU Hurd
+
+Per Samuel Thibault:
+
+> That's probably because pypy uses pthread_mutexes (which per POSIX aren't
+> interrupted by signals) instead of semaphores, and I guess that's
+> because sem_open isn't supported on Hurd yet.
+---
+ pypy/module/thread/test/test_lock.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/pypy/module/thread/test/test_lock.py b/pypy/module/thread/test/test_lock.py
+index b56f08e..4fdd57c 100644
+--- a/pypy/module/thread/test/test_lock.py
++++ b/pypy/module/thread/test/test_lock.py
+@@ -241,6 +241,7 @@ class AppTestLockSignals(GenericTestThread):
+     def w_alarm_interrupt(self, sig, frame):
+         raise KeyboardInterrupt
+ 
++    @py.test.mark.skipif("sys.platform == 'gnu0'")
+     def test_lock_acquire_interruption(self):
+         import thread, signal, time
+         # Mimic receiving a SIGINT (KeyboardInterrupt) with SIGALRM while stuck

@@ -1,0 +1,56 @@
+#!/bin/sh
+set -eu
+
+# Temporary build directories
+rm -rf build-*
+
+# Caches
+rm -rf rpython/_cache
+
+# Created by our PEP3147 patch:
+echo pypy/doc/config/objspace.magic_tag.txt
+
+# Build artifacts
+find . -name '*.pyc'
+find . -name __pycache__ | xargs rm -rf
+echo pypy/goal/pypy-c pypy/goal/libpypy-c.so
+echo pypy/goal/pycparser
+echo rpython/rlib/rvmprof/src/shared/libbacktrace/config.h
+find rpython/translator/c pypy/module/cpyext/test -name '*.o'
+find include '(' -name '*.h' -o -name '*.inl' ')'
+find lib_pypy '(' -name '*.so' -o -name '*.o' -o -name '*.c' ')' \
+             -a ! -name '_ctypes_test.c' -a ! -name '_testcapimodule.c' \
+             -a ! -path 'lib_pypy/_cffi_ssl/_cffi_src/hazmat_src/*' \
+             -a ! -path 'lib_pypy/_cffi_ssl/_cffi_src/openssl/src/*' \
+             -a ! -path 'lib_pypy/_cffi_ssl/openssl/src/*'
+
+# Tests
+echo pypy/test.db
+find extra_tests/ -name '*.o'
+find lib-python/2.7/lib2to3/ -name '*Grammar*.pickle'
+find lib-python/2.7/test/data/ -type f -a ! -name README
+
+# Failures
+echo core
+echo pypy/core
+rm -rf .cache
+
+# Docs
+rm -rf pypy/doc/_build
+
+find pypy/doc/config -name 'commandline*.rst' \
+	-o -name 'objspace*.rst' \
+	-o -name 'translation*.rst'
+find pypy/doc/config \( \
+	-name 'objspace*.txt' \
+	-o -name 'translation*.txt' \
+	\) -size 0 \
+	! -name 'objspace.honor__builtins__.txt' \
+	! -name 'objspace.std.sharesmallstr.txt' \
+	! -name 'objspace.usemodules._vmprof.txt' \
+	! -name 'translation.backendopt.really_remove_asserts.txt' \
+	! -name 'translation.icon.txt' \
+	! -name 'translation.noprofopt.txt'
+
+# Generated in override_dh_installdeb
+echo debian/pypy.preinst debian/pypy.postinst

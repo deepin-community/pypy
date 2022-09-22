@@ -1,0 +1,58 @@
+#!/bin/sh
+
+cp -a debian/tests/packages "$AUTOPKGTEST_TMP"
+
+HOME="$AUTOPKGTEST_TMP/home"
+mkdir "$HOME"
+site_packages="$HOME/.local/lib/pypy2.7/site-packages"
+
+tearDown() {
+	# Remove the --user install directory
+	rm -rf $site_packages
+}
+
+testFibPy() {
+	cd "$AUTOPKGTEST_TMP/packages/fibpy"
+	pypy setup.py install --user
+	assertTrue 'Install fibpy in --user' $?
+	assertTrue 'fibpy was installed to ~/.local' "[ -e $site_packages/fibpy-*.egg ]"
+	cd "$AUTOPKGTEST_TMP"
+	stdout=$(pypy -m fibpy 5)
+	assertTrue 'Execute fibpy from ~/.local' $?
+	assertEquals 'Correct result' 8 "$stdout"
+}
+
+testFibC() {
+	cd "$AUTOPKGTEST_TMP/packages/fibc"
+	pypy setup.py install --user
+	assertTrue 'Install fibc in --user' $?
+	assertTrue 'fibc was installed to ~/.local' "[ -e $site_packages/fibc-*.egg ]"
+	cd "$AUTOPKGTEST_TMP"
+	stdout=$(pypy -c 'from fibc import fib; print(fib(5))')
+	assertTrue 'Execute fibc from ~/.local' $?
+	assertEquals 'Correct result' 8 "$stdout"
+}
+
+testFibCFFI() {
+	cd "$AUTOPKGTEST_TMP/packages/fibcffi"
+	pypy setup.py install --user
+	assertTrue 'Install fibcffi in --user' $?
+	assertTrue 'fibcffi was installed to ~/.local' "[ -e $site_packages/fibcffi-*.egg ]"
+	cd "$AUTOPKGTEST_TMP"
+	stdout=$(pypy -m fibcffi 5)
+	assertTrue 'Execute fibcffi from ~/.local' $?
+	assertEquals 'Correct result' 8 "$stdout"
+}
+
+testFibPyDevelop() {
+	cd "$AUTOPKGTEST_TMP/packages/fibpy"
+	pypy setup.py develop --user
+	assertTrue 'Install editable fibpy in --user' $?
+	assertTrue 'fibpy was linked to ~/.local' "[ -e $site_packages/fibpy.egg-link ]"
+	cd "$AUTOPKGTEST_TMP"
+	stdout=$(pypy -m fibpy 5)
+	assertTrue 'Execute editable fibpy from ~/.local' $?
+	assertEquals 'Correct result' 8 "$stdout"
+}
+
+. shunit2

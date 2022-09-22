@@ -1,0 +1,13 @@
+#!/bin/sh
+set -euf
+
+# Some bits of the test suite (that are used by other packages)
+# are in the main stdlib package
+find lib-python -type f \
+	'(' -path '*/test/*' -o -path '*/tests/*' ')' \
+	! '(' -path '*/test/__init__.py' -o -name pystone.py \
+		-o -name regrtest.py -o -name test_support.py ')' \
+	! -path '*/test/data/*.txt' \
+	! -path '*/test/data/*.TXT' \
+	! -path '*/test/data/*.xml' \
+	-printf '%p\t/usr/lib/pypy/%h\n'

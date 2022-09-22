@@ -1,0 +1,49 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 7 Oct 2017 09:38:57 +0200
+Subject: Debian: Get version details from the Debian source package
+
+Rather than VCS.
+
+Return the Debian package version in sys.version.
+Return null strings in sys._mercurial.
+
+Forwarded: not-needed
+Last-Update: 2013-02-23
+---
+ pypy/module/sys/version.py |  1 +
+ rpython/tool/version.py    | 10 ++++++++++
+ 2 files changed, 11 insertions(+)
+
+diff --git a/pypy/module/sys/version.py b/pypy/module/sys/version.py
+index c0e19c6..0a69839 100644
+--- a/pypy/module/sys/version.py
++++ b/pypy/module/sys/version.py
+@@ -104,6 +104,7 @@ def get_subversion_info(space):
+     return space.wrap(('PyPy', '', ''))
+ 
+ def get_repo_info(space):
++    return space.wrap(('PyPy', '', ''))
+     info = get_repo_version_info(root=pypyroot)
+     if info:
+         repo_tag, repo_version = info
+diff --git a/rpython/tool/version.py b/rpython/tool/version.py
+index f13d26f..ea99323 100644
+--- a/rpython/tool/version.py
++++ b/rpython/tool/version.py
+@@ -31,6 +31,16 @@ def get_repo_version_info(hgexe=None, root=rpythonroot):
+     return res
+ 
+ def _get_repo_version_info(hgexe, root):
++    # Debian: built from a source tarball
++    p = Popen(('dpkg-parsechangelog',), stdout=PIPE, cwd=rpythonroot)
++    if p.wait() != 0:
++        maywarn(p.stderr.read(), 'dpkg-parsechangelog')
++        return default_retval
++    for line in p.stdout.read().split('\n'):
++        if line.split(':', 1)[0].strip() == 'Version':
++            version = line.split(':', 1)[1].strip()
++            return '', version
++
+     # Try to see if we can get info from Git if hgexe is not specified.
+     if not hgexe:
+         if os.path.isdir(os.path.join(root, '.git')):

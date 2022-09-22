@@ -1,0 +1,37 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Wed, 23 Sep 2020 17:13:43 -0700
+Subject: Tests: Skip readline tests raising InvalidTerminal
+
+We run the tests under TERM=dumb.
+PyPy doesn't emulate the readline module perfectly and throws an
+exception here.
+
+Forwarded: https://foss.heptapod.net/pypy/pypy/-/issues/3308
+---
+ lib-python/2.7/test/test_readline.py | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/lib-python/2.7/test/test_readline.py b/lib-python/2.7/test/test_readline.py
+index b11738c..572110e 100644
+--- a/lib-python/2.7/test/test_readline.py
++++ b/lib-python/2.7/test/test_readline.py
+@@ -3,6 +3,7 @@ Very minimal unittests for parts of the readline module.
+ """
+ import os
+ import unittest
++from pyrepl.unix_console import InvalidTerminal
+ from test.test_support import run_unittest, import_module
+ from test.script_helper import assert_python_ok
+ 
+@@ -19,7 +20,10 @@ class TestHistoryManipulation (unittest.TestCase):
+                          "The history update test cannot be run because the "
+                          "clear_history method is not available.")
+     def testHistoryUpdates(self):
+-        readline.clear_history()
++        try:
++            readline.clear_history()
++        except InvalidTerminal as e:
++            raise unittest.SkipTest(e)
+ 
+         readline.add_history("first line")
+         readline.add_history("second line")

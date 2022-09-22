@@ -1,0 +1,29 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 7 Oct 2017 09:38:58 +0200
+Subject: Debian: Suggest installation of pypy-tk package
+
+On failing _tkinter import.
+
+Author: Matthias Klose <doko@debian.org>
+Author: Stefano Rivera <stefanor@debian.org>
+Last-Update: 2013-11-15
+---
+ lib-python/2.7/lib-tk/Tkinter.py | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/lib-python/2.7/lib-tk/Tkinter.py b/lib-python/2.7/lib-tk/Tkinter.py
+index 6c02955..63f6fac 100644
+--- a/lib-python/2.7/lib-tk/Tkinter.py
++++ b/lib-python/2.7/lib-tk/Tkinter.py
+@@ -36,7 +36,10 @@ import sys
+ if sys.platform == "win32":
+     # Attempt to configure Tcl/Tk without requiring PATH
+     import FixTk
+-import _tkinter # If this fails your Python may not be configured for Tk
++try:
++    import _tkinter # If this fails your Python may not be configured for Tk
++except ImportError, msg:
++    raise ImportError, str(msg) + ', please install the pypy-tk package'
+ tkinter = _tkinter # b/w compat for export
+ TclError = _tkinter.TclError
+ from types import *

@@ -1,0 +1,45 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 26 Sep 2020 22:07:03 -0700
+Subject: Debian: Atomically write .pyc files
+
+The mechanism used is not compatible with Windows, so not forwardable.
+Python 3.3 eventually implemented this in importlib.
+
+Bug-cPython: https://bugs.python.org/issue13146
+Forwarded: not-needed
+---
+ lib-python/2.7/py_compile.py | 21 ++++++++++++++-------
+ 1 file changed, 14 insertions(+), 7 deletions(-)
+
+diff --git a/lib-python/2.7/py_compile.py b/lib-python/2.7/py_compile.py
+index 9d0ad16..71269fe 100644
+--- a/lib-python/2.7/py_compile.py
++++ b/lib-python/2.7/py_compile.py
+@@ -124,13 +124,20 @@ def compile(file, cfile=None, dfile=None, doraise=False):
+     except OSError, error:
+         if error.errno != errno.EEXIST:
+             raise
+-    with open(cfile, 'wb') as fc:
+-        fc.write('\0\0\0\0')
+-        wr_long(fc, timestamp)
+-        marshal.dump(codeobject, fc)
+-        fc.flush()
+-        fc.seek(0, 0)
+-        fc.write(MAGIC)
++    # id() is used to generate a pseudo-random filename.
++    path_tmp = '{}.{}'.format(cfile, id(cfile))
++    try:
++        with open(path_tmp, 'wb') as fc:
++            fc.write(MAGIC)
++            wr_long(fc, timestamp)
++            marshal.dump(codeobject, fc)
++        os.rename(path_tmp, cfile)
++    except OSError:
++        try:
++            os.unlink(path_tmp)
++        except OSError:
++            pass
++        raise
+     return cfile
+ 
+ def main(args=None):

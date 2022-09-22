@@ -1,0 +1,38 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 26 Sep 2020 22:11:33 -0700
+Subject: Debian: Explain that wininst files are not included in Debian
+
+The wininst-* files cannot be built within Debian, needing a zlib mingw
+build, which the zlib maintainer isn't going to provide.
+
+Origin: Debian cPython packaging
+---
+ lib-python/2.7/distutils/command/bdist_wininst.py | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/lib-python/2.7/distutils/command/bdist_wininst.py b/lib-python/2.7/distutils/command/bdist_wininst.py
+index 0c01e9d..15c14fd 100644
+--- a/lib-python/2.7/distutils/command/bdist_wininst.py
++++ b/lib-python/2.7/distutils/command/bdist_wininst.py
+@@ -14,6 +14,7 @@ from sysconfig import get_python_version
+ from distutils.core import Command
+ from distutils.dir_util import remove_tree
+ from distutils.errors import DistutilsOptionError, DistutilsPlatformError
++from distutils.errors import DistutilsFileError
+ from distutils import log
+ from distutils.util import get_platform
+ 
+@@ -361,7 +362,12 @@ class bdist_wininst (Command):
+             sfix = ''
+ 
+         filename = os.path.join(directory, "wininst-%.1f%s.exe" % (bv, sfix))
+-        f = open(filename, "rb")
++        try:
++            f = open(filename, "rb")
++        except IOError as msg:
++            raise DistutilsFileError(
++                '%s, %s not included in the Debian packages.'
++                % (str(msg), filename))
+         try:
+             return f.read()
+         finally:

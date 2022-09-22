@@ -1,0 +1,30 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 7 Oct 2017 09:38:58 +0200
+Subject: Stdlib: Don't add standard library dirs to library_dirs and
+ runtime_library_dirs.
+
+Origin: Debian cpython packaging
+Author: Matthias Klose <doko@debian.org>
+Last-Update: 2011-12-19
+---
+ lib-python/2.7/distutils/unixccompiler.py | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/lib-python/2.7/distutils/unixccompiler.py b/lib-python/2.7/distutils/unixccompiler.py
+index 250ff12..bf55820 100644
+--- a/lib-python/2.7/distutils/unixccompiler.py
++++ b/lib-python/2.7/distutils/unixccompiler.py
+@@ -172,7 +172,12 @@ class UnixCCompiler(CCompiler):
+         objects, output_dir = self._fix_object_args(objects, output_dir)
+         libraries, library_dirs, runtime_library_dirs = \
+             self._fix_lib_args(libraries, library_dirs, runtime_library_dirs)
+-
++        # filter out standard library paths, which are not explicitely needed
++        # for linking
++        library_dirs = [dir for dir in library_dirs
++                        if not dir in ('/lib', '/lib64', '/usr/lib', '/usr/lib64')]
++        runtime_library_dirs = [dir for dir in runtime_library_dirs
++                                if not dir in ('/lib', '/lib64', '/usr/lib', '/usr/lib64')]
+         lib_opts = gen_lib_options(self, library_dirs, runtime_library_dirs,
+                                    libraries)
+         if type(output_dir) not in (StringType, NoneType):

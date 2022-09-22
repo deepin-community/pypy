@@ -1,0 +1,5 @@
+version=4
+
+# To repack, run debian/rules get-packaged-orig-source
+opts=dversionmangle=s/\+dfsg// \
+	https://downloads.python.org/pypy/pypy2.7-v([0-9.]+)-src.tar.bz2

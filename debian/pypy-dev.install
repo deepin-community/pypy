@@ -1,0 +1,2 @@
+pypy/module/cpyext/include/* /usr/lib/pypy/include/
+pypy/module/cpyext/parse/*   /usr/lib/pypy/include/

@@ -1,0 +1,24 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 7 Oct 2017 09:38:57 +0200
+Subject: Tests: Skip fsync tests when building with eatmydata
+
+Author: Stefano Rivera <stefanor@debian.org>
+Forwarded: not-needed
+Last-Update: 2012-02-06
+---
+ lib-python/2.7/test/test_os.py | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/lib-python/2.7/test/test_os.py b/lib-python/2.7/test/test_os.py
+index f7b270b..a09b392 100644
+--- a/lib-python/2.7/test/test_os.py
++++ b/lib-python/2.7/test/test_os.py
+@@ -675,6 +675,8 @@ class TestInvalidFD(unittest.TestCase):
+         except OSError as e:
+             self.assertEqual(e.errno, errno.EBADF)
+         else:
++            if f.__name__.endswith('sync'):
++                return  # eatmydata won't raise an OSError
+             self.fail("%r didn't raise an OSError with a bad file descriptor"
+                       % f)
+ 

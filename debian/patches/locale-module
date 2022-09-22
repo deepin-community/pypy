@@ -1,0 +1,29 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 7 Oct 2017 09:38:58 +0200
+Subject: Stdlib: Don't map 'utf8', 'utf-8' to 'utf'
+
+'utf' is not a known encoding for glibc.
+
+Author: Matthias Klose <doko@debian.org>
+Origin: Debian cpython packaging
+Bug-cpython: http://bugs.python.org/issue1166957
+Last-Update: 2011-12-19
+---
+ lib-python/2.7/locale.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/lib-python/2.7/locale.py b/lib-python/2.7/locale.py
+index 51909f8..b57f365 100644
+--- a/lib-python/2.7/locale.py
++++ b/lib-python/2.7/locale.py
+@@ -1761,8 +1761,8 @@ locale_alias = {
+     'uk_ua.iso88595':                       'uk_UA.ISO8859-5',
+     'uk_ua.koi8u':                          'uk_UA.KOI8-U',
+     'uk_ua.microsoftcp1251':                'uk_UA.CP1251',
+-    'univ':                                 'en_US.utf',
+-    'universal':                            'en_US.utf',
++    'univ':                                 'en_US.UTF-8',
++    'universal':                            'en_US.UTF-8',
+     'universal.utf8@ucs4':                  'en_US.UTF-8',
+     'unm_us':                               'unm_US.UTF-8',
+     'ur':                                   'ur_PK.CP1256',

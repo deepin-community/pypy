@@ -1,0 +1,24 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 7 Oct 2017 09:38:58 +0200
+Subject: Debian: Always output the mandelbrot
+
+So that our buildds see progress
+
+Forwarded: not-needed
+---
+ rpython/tool/ansi_print.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rpython/tool/ansi_print.py b/rpython/tool/ansi_print.py
+index bfa40be..22ab296 100644
+--- a/rpython/tool/ansi_print.py
++++ b/rpython/tool/ansi_print.py
+@@ -7,7 +7,7 @@ from py.io import ansi_print
+ from rpython.tool.ansi_mandelbrot import Driver
+ 
+ 
+-isatty = getattr(sys.stderr, 'isatty', lambda: False)
++isatty = lambda: True
+ mandelbrot_driver = Driver()
+ wrote_dot = False     # global shared state
+ 

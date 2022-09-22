@@ -1,0 +1,24 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 7 Oct 2017 09:38:57 +0200
+Subject: Arch: x32 requires -fPIC
+
+x32 detection is currently Debian-specific.
+---
+ rpython/translator/platform/__init__.py | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/rpython/translator/platform/__init__.py b/rpython/translator/platform/__init__.py
+index 9f7a9e2..4866d13 100644
+--- a/rpython/translator/platform/__init__.py
++++ b/rpython/translator/platform/__init__.py
+@@ -283,7 +283,9 @@ if sys.platform.startswith('linux'):
+     # detect armhf without shelling out
+     if (platform.architecture()[0] == '64bit'
+             or platform.machine().startswith(
+-                ('arm', 'm68k', 'mips', 'parisc', 'ppc', 'sh4'))):
++                ('arm', 'm68k', 'mips', 'parisc', 'ppc', 'sh4'))
++            or getattr(getattr(sys, 'implementation', sys), '_multiarch',
++                       None) == 'x86_64-linux-gnux32'):
+         host_factory = LinuxPIC
+     else:
+         host_factory = Linux

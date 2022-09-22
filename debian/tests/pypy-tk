@@ -1,0 +1,8 @@
+#!/bin/sh
+
+testImportTk() {
+	pypy -c 'import Tkinter'
+	assertTrue 'Tkinter is importable' $?
+}
+
+. shunit2

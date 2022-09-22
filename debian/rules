@@ -1,0 +1,106 @@
+#!/usr/bin/make -f
+
+# Take advantage of PyPy if it's installed
+PYTHON=$(shell command -v pypy > /dev/null && echo pypy || echo python2.7)
+
+# PyPy doesn't harden well, and handles opt and debug itself
+BUILDFLAGS_ENV := DEB_BUILD_MAINT_OPTIONS=hardening=-stackprotector,-fortify
+BUILDFLAGS_ENV += DEB_CFLAGS_MAINT_STRIP="-O0 -O1 -O2 -O3 -Os -Ofast -g"
+export CFLAGS = $(shell $(BUILDFLAGS_ENV) dpkg-buildflags --get CFLAGS)
+export LDFLAGS = $(shell $(BUILDFLAGS_ENV) dpkg-buildflags --get LDFLAGS)
+
+# Our multiarch patch expects DEB_HOST_MULTIARCH
+include /usr/share/dpkg/architecture.mk
+
+%:
+	dh $@ --with sphinxdoc
+
+override_dh_auto_configure:
+	# This rule left intentionally empty
+
+override_dh_auto_build-arch: pypy/goal/pypy-c
+	$(MAKE) -C pypy/doc man BUILDDIR=$(CURDIR)/build-docs
+
+	# Build cffi modules
+	pypy/goal/pypy-c lib_pypy/pypy_tools/build_cffi_imports.py
+	debian/scripts/multiarch-extensions.sh
+
+override_dh_auto_build-indep:
+	$(MAKE) -C pypy/doc html BUILDDIR=$(CURDIR)/build-docs
+
+pypy/goal/pypy-c:
+	debian/scripts/translate.sh --python $(PYTHON)
+
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+override_dh_auto_test-arch: export TMPDIR = $(CURDIR)/build-tests-tmp
+override_dh_auto_test-arch: export HOME = $(TMPDIR)
+override_dh_auto_test-arch:
+	rm -rf $(TMPDIR) build-tests
+	mkdir $(TMPDIR) build-tests
+	# Test failures currently ignored
+	PYTHONPATH=. $(PYTHON) -u testrunner/runner.py \
+	                       --logfile=build-tests/pytest-A.log \
+	                       --config=pypy/pytest-A.cfg \
+	                       --root=pypy || true
+	TERM=$${TERM:-dumb} $(PYTHON) -u pypy/test_all.py \
+	          --pypy=pypy/goal/pypy-c \
+	          --resultlog=build-tests/lib-python.log \
+	          lib-python || true
+	pypy/goal/pypy-c -u pypy/test_all.py \
+	       --resultlog=build-tests/pypy-c.log \
+	       pypy/module/pypyjit/test_pypy_c || true
+endif
+
+override_dh_auto_install:
+	debian/scripts/gen-backend-versions.py
+
+override_dh_fixperms-arch:
+	debian/scripts/cleanup-lib.sh pypy-lib
+	find debian/pypy-tk \( -name '*.pyc' -o -name '__pycache__' \) -delete
+	# Fix interpreters
+	find debian/pypy-tk \
+	     -name '*.py' -print0 \
+	     | xargs -0 sed -i -e '1s|^#!.*python.*|#!/usr/bin/pypy|'
+	dh_fixperms -a
+
+override_dh_fixperms-indep:
+	debian/scripts/cleanup-lib.sh pypy-lib-testsuite
+	dh_fixperms -i
+
+override_dh_sphinxdoc-arch:
+	# dh_sphinxdoc doesn't fail silently when there are no docs
+
+override_dh_compress:
+	dh_compress -X.inv -X.txt
+
+override_dh_shlibdeps-arch:
+	dh_shlibdeps --package=pypy -- -dPre-Depends
+	dh_shlibdeps --arch --remaining-packages
+
+override_dh_installdeb:
+	debian/scripts/maintscript.sh pypy.preinst
+	debian/scripts/maintscript.sh pypy.postinst
+	debian/scripts/maintscript.sh pypy.prerm
+	debian/scripts/maintscript.sh pypy-lib.prerm
+	dh_installdeb
+
+HG_REPO ?= https://bitbucket.org/pypy/pypy
+REV = $(shell dpkg-parsechangelog | sed -rne 's,^Version: .*hg([0-9]+).*,\1,p')
+DVER = $(shell dpkg-parsechangelog | sed -rne 's,^Version: (.+)\+dfsg-.*,\1,p')
+UVER = $(shell echo $(DVER) | sed -e 's/~//')
+get-packaged-orig-source:
+	@echo "You can build this from a local repo by supplying the HG_REPO variable"
+	rm -rf pypy-$(DVER).orig
+	hg clone $(HG_REPO) pypy-$(DVER).orig
+ifeq (,$(REV))
+	cd pypy-$(DVER).orig && hg up -r release-pypy2.7-v$(UVER)
+else
+	cd pypy-$(DVER).orig && hg up -r $(REV)
+endif
+	rm -rf pypy-$(DVER).orig/.hg*
+	rm pypy-$(DVER).orig/lib-python/2.7/distutils/command/*.exe
+	rm pypy-$(DVER).orig/rpython/rlib/test/loadtest/loadtest*.dll
+	rm -rf pypy-$(DVER).orig/lib-python/2.7/ensurepip/_bundled/
+	tar -cJ --owner root --group root --mode a+rX \
+	    -f pypy_$(DVER)+dfsg.orig.tar.xz pypy-$(DVER).orig
+	rm -rf pypy-$(DVER).orig

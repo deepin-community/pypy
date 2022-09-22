@@ -1,0 +1,45 @@
+#!/bin/sh
+
+base="$AUTOPKGTEST_TMP/module"
+tag=$(pypy -c 'import imp; print(imp.get_tag())')
+
+setUp() {
+	mkdir -p $base/a
+	touch $base/a/__init__.py
+	touch $base/a/a_impl.py
+	touch $base/b.py
+}
+
+tearDown() {
+	rm -rf "$base"
+}
+
+testDirectory() {
+	pypycompile "$base"
+	assertTrue $?
+	assertTrue 'base __pycache__ exists' "[ -d $base/__pycache__ ]"
+	assertTrue 'a __pycache__ exists' "[ -d $base/a/__pycache__ ]"
+	assertTrue 'b compiled' "[ -f $base/__pycache__/b.$tag.pyc ]"
+	assertTrue 'a compiled' "[ -f $base/a/__pycache__/__init__.$tag.pyc ]"
+	assertTrue 'a.a_impl compiled' "[ -f $base/a/__pycache__/a_impl.$tag.pyc ]"
+
+	pypyclean "$base"
+	assertTrue $?
+	assertTrue 'base __pycache__ cleaned' "[ ! -d $base/__pycache__ ]"
+	assertTrue 'a __pycache__ cleaned' "[ ! -d $base/a/__pycache__ ]"
+	assertTrue 'b cleaned' "[ ! -f $base/__pycache__/b.$tag.pyc ]"
+	assertTrue 'a cleaned' "[ ! -f $base/a/__pycache__/__init__.$tag.pyc ]"
+	assertTrue 'a.a_impl cleaned' "[ ! -f $base/a/__pycache__/a_impl.$tag.pyc ]"
+}
+
+testDirectoryExclude() {
+	pypycompile "$base" -X '.*_impl'
+	assertTrue $?
+	assertTrue 'base __pycache__ exists' "[ -d $base/__pycache__ ]"
+	assertTrue 'a __pycache__ exists' "[ -d $base/a/__pycache__ ]"
+	assertTrue 'b compiled' "[ -f $base/__pycache__/b.$tag.pyc ]"
+	assertTrue 'a compiled' "[ -f $base/a/__pycache__/__init__.$tag.pyc ]"
+	assertTrue 'a.a_impl NOT compiled' "[ ! -f $base/a/__pycache__/a_impl.$tag.pyc ]"
+}
+
+. shunit2

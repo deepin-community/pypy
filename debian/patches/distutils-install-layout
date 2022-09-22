@@ -1,0 +1,365 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 7 Oct 2017 09:38:58 +0200
+Subject: Debian: Add a distutils option --install-layout=deb
+
+This option:
+ - installs into $prefix/dist-packages instead of $prefix/site-packages.
+ - doesn't encode the python version into the egg name.
+
+Based on cpython Debian packaging
+
+Author: Matthias Klose <doko@debian.org>
+Author: Stefano Rivera <stefanor@debian.org>
+Last-Update: 2013-02-23
+---
+ lib-python/2.7/distutils/command/install.py        | 44 +++++++++++++++++++++-
+ .../2.7/distutils/command/install_egg_info.py      | 30 ++++++++++++---
+ lib-python/2.7/distutils/sysconfig_pypy.py         |  6 ++-
+ lib-python/2.7/pydoc.py                            |  1 +
+ lib-python/2.7/site.py                             | 28 +++++++++-----
+ lib-python/2.7/sysconfig.py                        | 29 +++++++++++++-
+ lib-python/2.7/test/test_site.py                   | 10 ++---
+ lib-python/2.7/test/test_sysconfig.py              |  3 +-
+ 8 files changed, 125 insertions(+), 26 deletions(-)
+
+diff --git a/lib-python/2.7/distutils/command/install.py b/lib-python/2.7/distutils/command/install.py
+index 6fe62be..21a0b21 100644
+--- a/lib-python/2.7/distutils/command/install.py
++++ b/lib-python/2.7/distutils/command/install.py
+@@ -97,6 +97,20 @@ INSTALL_SCHEMES = {
+         'scripts': '$base/Scripts',
+         'data'   : '$base',
+         },
++    'pypy-deb': {
++        'purelib': '$base/dist-packages',
++        'platlib': '$base/dist-packages',
++        'headers': '$base/include',
++        'scripts': '$base/bin',
++        'data'   : '$base',
++        },
++    'pypy-local': {
++        'purelib': '$base/../../local/lib/pypy$py_version_short/dist-packages',
++        'platlib': '$base/../../local/lib/pypy$py_version_short/dist-packages',
++        'headers': '$base/../../local/include',
++        'scripts': '$base/../../local/bin',
++        'data'   : '$base/../../local',
++        },
+     }
+ 
+ # The keys to an installation scheme; if any new types of files are to be
+@@ -168,6 +182,9 @@ class install (Command):
+ 
+         ('record=', None,
+          "filename in which to record list of installed files"),
++
++        ('install-layout=', None,
++         "installation layout to choose (known values: deb, unix)"),
+         ]
+ 
+     boolean_options = ['compile', 'force', 'skip-build', 'user']
+@@ -182,6 +199,7 @@ class install (Command):
+         self.exec_prefix = None
+         self.home = None
+         self.user = 0
++        self.prefix_option = None
+ 
+         # These select only the installation base; it's up to the user to
+         # specify the installation scheme (currently, that means supplying
+@@ -203,6 +221,9 @@ class install (Command):
+         self.install_userbase = USER_BASE
+         self.install_usersite = USER_SITE
+ 
++        # enable custom installation, known values: deb
++        self.install_layout = None
++
+         self.compile = None
+         self.optimize = None
+ 
+@@ -435,6 +456,7 @@ class install (Command):
+             self.install_base = self.install_platbase = self.home
+             self.select_scheme("unix_home")
+         else:
++            self.prefix_option = self.prefix
+             if self.prefix is None:
+                 if self.exec_prefix is not None:
+                     raise DistutilsOptionError, \
+@@ -449,7 +471,25 @@ class install (Command):
+ 
+             self.install_base = self.prefix
+             self.install_platbase = self.exec_prefix
+-            self.select_scheme("unix_prefix")
++            if self.install_layout:
++                if self.install_layout.lower() in ['deb']:
++                    self.select_scheme("pypy-deb")
++                elif self.install_layout.lower() in ['posix', 'unix']:
++                    self.select_scheme("unix_prefix")
++                else:
++                    raise DistutilsOptionError(
++                            "unknown value for --install-layout")
++            elif ((self.prefix_option
++                        and not os.path.normpath(self.prefix).startswith(
++                            '/usr/local/'))
++                    or 'PYTHONUSERBASE' in os.environ
++                    or 'real_prefix' in sys.__dict__):
++                self.select_scheme("unix_prefix")
++            else:
++                if os.path.normpath(self.prefix).startswith('/usr/local/'):
++                    self.select_scheme("pypy-deb")
++                else:
++                    self.select_scheme("pypy-local")
+ 
+     # finalize_unix ()
+ 
+@@ -482,7 +522,7 @@ class install (Command):
+     def select_scheme (self, name):
+         # it's the caller's problem if they supply a bad name!
+         if (hasattr(sys, 'pypy_version_info') and
+-                not name.endswith(('_user', '_home'))):
++            not (name.endswith(('_user', '_home')) or name.startswith('pypy-'))):
+             if os.name == 'nt':
+                 name = 'pypy_nt'
+             else:
+diff --git a/lib-python/2.7/distutils/command/install_egg_info.py b/lib-python/2.7/distutils/command/install_egg_info.py
+index c888031..88b5d94 100644
+--- a/lib-python/2.7/distutils/command/install_egg_info.py
++++ b/lib-python/2.7/distutils/command/install_egg_info.py
+@@ -14,18 +14,38 @@ class install_egg_info(Command):
+     description = "Install package's PKG-INFO metadata as an .egg-info file"
+     user_options = [
+         ('install-dir=', 'd', "directory to install to"),
++        ('install-layout', None, "custom installation layout"),
+     ]
+ 
+     def initialize_options(self):
+         self.install_dir = None
++        self.install_layout = None
++        self.prefix_option = None
+ 
+     def finalize_options(self):
+         self.set_undefined_options('install_lib',('install_dir','install_dir'))
+-        basename = "%s-%s-py%s.egg-info" % (
+-            to_filename(safe_name(self.distribution.get_name())),
+-            to_filename(safe_version(self.distribution.get_version())),
+-            sys.version[:3]
+-        )
++        self.set_undefined_options('install',('install_layout','install_layout'))
++        self.set_undefined_options('install',('prefix_option','prefix_option'))
++        if self.install_layout:
++            if not self.install_layout.lower() in ['deb', 'unix']:
++                raise DistutilsOptionError(
++                    "unknown value for --install-layout")
++            no_pyver = (self.install_layout.lower() == 'deb')
++        elif self.prefix_option:
++            no_pyver = False
++        else:
++            no_pyver = True
++        if no_pyver:
++            basename = "%s-%s.egg-info" % (
++                to_filename(safe_name(self.distribution.get_name())),
++                to_filename(safe_version(self.distribution.get_version()))
++                )
++        else:
++            basename = "%s-%s-py%s.egg-info" % (
++                to_filename(safe_name(self.distribution.get_name())),
++                to_filename(safe_version(self.distribution.get_version())),
++                sys.version[:3]
++                )
+         self.target = os.path.join(self.install_dir, basename)
+         self.outputs = [self.target]
+ 
+diff --git a/lib-python/2.7/distutils/sysconfig_pypy.py b/lib-python/2.7/distutils/sysconfig_pypy.py
+index d10b92a..d5ab5b8 100644
+--- a/lib-python/2.7/distutils/sysconfig_pypy.py
++++ b/lib-python/2.7/distutils/sysconfig_pypy.py
+@@ -59,11 +59,15 @@ def get_python_lib(plat_specific=0, standard_lib=0, prefix=None):
+     If 'prefix' is supplied, use it instead of sys.prefix or
+     sys.exec_prefix -- i.e., ignore 'plat_specific'.
+     """
++    is_default_prefix = not prefix or os.path.normpath(prefix).startswith(('/usr/lib/pypy'))
+     if prefix is None:
+         prefix = PREFIX
+     if standard_lib:
+         return os.path.join(prefix, "lib-python", get_python_version())
+-    return os.path.join(prefix, 'site-packages')
++    if is_default_prefix and 'PYTHONUSERBASE' not in os.environ and 'real_prefix' not in sys.__dict__:
++        return os.path.join(prefix, 'dist-packages')
++    else:
++        return os.path.join(prefix, 'site-packages')
+ 
+ 
+ _config_vars = None
+diff --git a/lib-python/2.7/pydoc.py b/lib-python/2.7/pydoc.py
+index 9a6826c..f9e7419 100755
+--- a/lib-python/2.7/pydoc.py
++++ b/lib-python/2.7/pydoc.py
+@@ -393,6 +393,7 @@ class Doc:
+                                  'marshal', 'posix', 'signal', 'sys',
+                                  'thread', 'zipimport') or
+              (file.startswith(basedir) and
++              not file.startswith(os.path.join(basedir, 'dist-packages')) and
+               not file.startswith(os.path.join(basedir, 'site-packages')))) and
+             object.__name__ not in ('xml.etree', 'test.pydoc_mod')):
+             if docloc.startswith(("http://", "https://")):
+diff --git a/lib-python/2.7/site.py b/lib-python/2.7/site.py
+index ec24e96..2918a06 100644
+--- a/lib-python/2.7/site.py
++++ b/lib-python/2.7/site.py
+@@ -12,13 +12,18 @@ works).
+ 
+ This will append site-specific paths to the module search path.  On
+ Unix (including Mac OSX), it starts with sys.prefix and
+-sys.exec_prefix (if different) and appends
+-lib/python<version>/site-packages as well as lib/site-python.
++sys.exec_prefix (if different) and appends dist-packages.
+ On other platforms (such as Windows), it tries each of the
+ prefixes directly, as well as with lib/site-packages appended.  The
+ resulting directories, if they exist, are appended to sys.path, and
+ also inspected for path configuration files.
+ 
++For Debian and derivatives, this sys.path is augmented with directories
++for packages distributed within the distribution. Local addons go
++into /usr/local/lib/pypy<version>/dist-packages, Debian addons
++install into /usr/{lib,share}/pypy<version>/dist-packages.
++/usr/lib/pypy<version>/site-packages is not used.
++
+ A path configuration file is a file whose name has the form
+ <package>.pth; its contents are additional directories (one per line)
+ to be added to sys.path.  Non-existing directories (or
+@@ -277,6 +282,13 @@ def addusersitepackages(known_paths):
+ 
+     if ENABLE_USER_SITE and os.path.isdir(user_site):
+         addsitedir(user_site, known_paths)
++    if ENABLE_USER_SITE:
++        for dist_libdir in ("local/lib", "lib"):
++            user_site = os.path.join(USER_BASE, dist_libdir,
++                                     "pypy" + sys.version[:3],
++                                     "dist-packages")
++            if os.path.isdir(user_site):
++                addsitedir(user_site, known_paths)
+     return known_paths
+ 
+ def getsitepackages():
+@@ -298,15 +310,11 @@ def getsitepackages():
+ 
+         if sys.platform in ('os2emx', 'riscos'):
+             sitepackages.append(os.path.join(prefix, "Lib", "site-packages"))
+-        elif is_pypy:
+-            from distutils.sysconfig import get_python_lib
+-            sitedir = get_python_lib(standard_lib=False, prefix=prefix)
+-            sitepackages.append(sitedir)
+         elif os.sep == '/':
+-            sitepackages.append(os.path.join(prefix, "lib",
+-                                        "python" + sys.version[:3],
+-                                        "site-packages"))
+-            sitepackages.append(os.path.join(prefix, "lib", "site-python"))
++            sitepackages.append(os.path.join(
++                prefix.replace("lib/pypy", "local/lib/pypy" + sys.version[:3]),
++                "dist-packages"))
++            sitepackages.append(os.path.join(prefix, "dist-packages"))
+         else:
+             sitepackages.append(prefix)
+             sitepackages.append(os.path.join(prefix, "lib", "site-packages"))
+diff --git a/lib-python/2.7/sysconfig.py b/lib-python/2.7/sysconfig.py
+index 26362d6..b027dc1 100644
+--- a/lib-python/2.7/sysconfig.py
++++ b/lib-python/2.7/sysconfig.py
+@@ -46,6 +46,26 @@ _INSTALL_SCHEMES = {
+         'scripts': '{base}/Scripts',
+         'data'   : '{base}',
+         },
++    'pypy-deb': {
++        'stdlib': '{base}/lib-python',
++        'platstdlib': '{base}/lib-python',
++        'purelib': '{base}/lib-python',
++        'platlib': '{base}/lib-python',
++        'include': '{base}/include',
++        'platinclude': '{base}/include',
++        'scripts': '{base}/bin',
++        'data'   : '{base}',
++        },
++    'pypy-local': {
++        'stdlib': '{base}/lib-python/{py_version_short}',
++        'platstdlib': '{base}/lib-python/{py_version_short}',
++        'purelib': '{base}/../../local/lib/pypy{py_version_short}/lib-python',
++        'platlib': '{base}/../../local/lib/pypy{py_version_short}/lib-python',
++        'include': '{base}/include',
++        'platinclude': '{base}/include',
++        'scripts': '{base}/../../local/bin',
++        'data'   : '{base}/../../local',
++        },
+     'nt': {
+         'stdlib': '{base}/Lib',
+         'platstdlib': '{base}/Lib',
+@@ -194,7 +214,11 @@ def _expand_vars(scheme, vars):
+ def _get_default_scheme():
+     if os.name == 'posix':
+         if '__pypy__' in sys.builtin_module_names:
+-            return 'pypy'
++            # the default scheme for posix on Debian/Ubuntu is pypy-local
++            # FIXME: return dist-packages/posix_prefix only for
++            #   is_default_prefix and 'PYTHONUSERBASE' not in os.environ and 'real_prefix' not in sys.__dict__
++            # is_default_prefix = not prefix or os.path.normpath(prefix) in ('/usr', '/usr/local')
++            return 'pypy-local'
+         # the default scheme for posix is posix_prefix
+         return 'posix_prefix'
+     if os.name == 'nt':
+@@ -448,7 +472,8 @@ def get_config_h_filename():
+         else:
+             inc_dir = _PROJECT_BASE
+     else:
+-        inc_dir = get_path('platinclude')
++        inc_dir = get_path('platinclude', 'pypy-deb').replace("/../../local/",
++                                                              "/", 1)
+     return os.path.join(inc_dir, 'pyconfig.h')
+ 
+ def get_scheme_names():
+diff --git a/lib-python/2.7/test/test_site.py b/lib-python/2.7/test/test_site.py
+index 8171468..26f740e 100644
+--- a/lib-python/2.7/test/test_site.py
++++ b/lib-python/2.7/test/test_site.py
+@@ -253,8 +253,8 @@ class HelperFunctionsTests(unittest.TestCase):
+             wanted = os.path.join('xoxo', 'Lib', 'site-packages')
+             self.assertEqual(dirs[0], wanted)
+         elif '__pypy__' in sys.builtin_module_names:
+-            self.assertEquals(len(dirs), 1)
+-            wanted = os.path.join('xoxo', 'site-packages')
++            self.assertEquals(len(dirs), 2)
++            wanted = os.path.join('xoxo', 'dist-packages')
+             self.assertEquals(dirs[0], wanted)
+         elif os.sep == '/':
+             # OS X, Linux, FreeBSD, etc
+@@ -293,9 +293,9 @@ class HelperFunctionsTests(unittest.TestCase):
+             self.assertTrue(user_site.startswith(user_base), user_site)
+ 
+         def fake_isdir(path):
+-            fake_isdir.arg = path
++            fake_isdir.arg.append(path)
+             return False
+-        fake_isdir.arg = None
++        fake_isdir.arg = []
+ 
+         def must_not_be_called(*args):
+             raise AssertionError
+@@ -309,7 +309,7 @@ class HelperFunctionsTests(unittest.TestCase):
+             known_paths = set()
+             site.addusersitepackages(known_paths)
+ 
+-            self.assertEqual(fake_isdir.arg, user_site)
++            self.assertIn(user_site, fake_isdir.arg)
+             self.assertFalse(known_paths)
+ 
+ 
+diff --git a/lib-python/2.7/test/test_sysconfig.py b/lib-python/2.7/test/test_sysconfig.py
+index 9fb69bf..d1535f0 100644
+--- a/lib-python/2.7/test/test_sysconfig.py
++++ b/lib-python/2.7/test/test_sysconfig.py
+@@ -253,7 +253,8 @@ class TestSysConfig(unittest.TestCase):
+ 
+     def test_get_scheme_names(self):
+         wanted = ('nt', 'nt_user', 'os2', 'os2_home', 'osx_framework_user',
+-                  'posix_home', 'posix_prefix', 'posix_user', 'pypy', 'pypy_nt')
++                  'posix_home', 'posix_prefix', 'posix_user', 'pypy',
++                  'pypy-deb', 'pypy-local', 'pypy_nt')
+         self.assertEqual(get_scheme_names(), wanted)
+ 
+     @unittest.skipIf(check_impl_detail(pypy=True),

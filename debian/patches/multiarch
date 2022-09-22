@@ -1,0 +1,190 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 7 Oct 2017 09:38:58 +0200
+Subject: Debian: Add multiarch tag to C extension file names
+
+Add _multiarch variable to sys, and MULTIARCH to sysconfig variables,
+exposing the multiarch tag.
+
+Add the multiarch tag to C extension file names, by default, while still
+supporting bare suffixes.
+
+Based on multiarch.diff in Debian cPython.
+
+Forwarded: not-needed
+Last-Modified: 2014-09-20
+---
+ lib-python/2.7/sysconfig.py            |  3 +++
+ lib-python/2.7/test/test_sysconfig.py  |  5 +++++
+ lib_pypy/_sysconfigdata.py             |  5 +++++
+ pypy/module/imp/importing.py           |  5 ++++-
+ pypy/module/imp/interp_imp.py          |  8 ++++++--
+ pypy/module/imp/test/test_import.py    |  3 ++-
+ pypy/module/sys/debian.py              | 12 ++++++++++++
+ pypy/module/sys/moduledef.py           |  4 ++++
+ pypy/module/sys/test/test_sysmodule.py |  5 +++++
+ 9 files changed, 46 insertions(+), 4 deletions(-)
+ create mode 100644 pypy/module/sys/debian.py
+
+diff --git a/lib-python/2.7/sysconfig.py b/lib-python/2.7/sysconfig.py
+index acb2d0e..26362d6 100644
+--- a/lib-python/2.7/sysconfig.py
++++ b/lib-python/2.7/sysconfig.py
+@@ -551,6 +551,9 @@ def get_config_vars(*args):
+         import imp
+         for suffix, mode, type_ in imp.get_suffixes():
+             if type_ == imp.C_EXTENSION:
++                multiarch = _CONFIG_VARS.get('MULTIARCH')
++                if multiarch and multiarch in suffix:
++                    continue
+                 _CONFIG_VARS['SOABI'] = suffix.split('.')[1]
+                 break
+         _CONFIG_VARS['INCLUDEPY'] = os.path.join(_CONFIG_VARS['prefix'],
+diff --git a/lib-python/2.7/test/test_sysconfig.py b/lib-python/2.7/test/test_sysconfig.py
+index 43a8ca7..9fb69bf 100644
+--- a/lib-python/2.7/test/test_sysconfig.py
++++ b/lib-python/2.7/test/test_sysconfig.py
+@@ -344,6 +344,11 @@ class TestSysConfig(unittest.TestCase):
+         self.assertEqual(status, 0)
+         self.assertEqual(my_platform, test_platform)
+ 
++    def test_multiarch_config_var(self):
++        multiarch = get_config_var('MULTIARCH')
++        self.assertIsInstance(multiarch, str)
++
++
+ def test_main():
+     run_unittest(TestSysConfig)
+ 
+diff --git a/lib_pypy/_sysconfigdata.py b/lib_pypy/_sysconfigdata.py
+index dda3edd..8b20ea8 100644
+--- a/lib_pypy/_sysconfigdata.py
++++ b/lib_pypy/_sysconfigdata.py
+@@ -1,5 +1,10 @@
+ import imp
++import sys
+ 
+ build_time_vars = {
+     "SO": [s[0] for s in imp.get_suffixes() if s[2] == imp.C_EXTENSION][0]
+ }
++if hasattr(sys, '_multiarch'):
++    build_time_vars.update({
++        'MULTIARCH': sys._multiarch,
++    })
+diff --git a/pypy/module/imp/importing.py b/pypy/module/imp/importing.py
+index 573cfc6..8579296 100644
+--- a/pypy/module/imp/importing.py
++++ b/pypy/module/imp/importing.py
+@@ -39,7 +39,7 @@ DEFAULT_SOABI = 'pypy-%d%d' % PYPY_VERSION[:2]
+ DEFAULT_MAGIC_TAG = DEFAULT_SOABI
+ 
+ @specialize.memo()
+-def get_so_extension(space):
++def get_so_extension(space, multiarch=True):
+     if space.config.objspace.soabi is not None:
+         soabi = space.config.objspace.soabi
+     else:
+@@ -51,6 +51,9 @@ def get_so_extension(space):
+     if not space.config.translating:
+         soabi += 'i'
+ 
++    if multiarch and hasattr(sys, '_multiarch'):
++        soabi += '-' + sys._multiarch
++
+     return '.' + soabi + SO
+ 
+ def log_pyverbose(space, level, message):
+diff --git a/pypy/module/imp/interp_imp.py b/pypy/module/imp/interp_imp.py
+index 7d133f5..21b9f3d 100644
+--- a/pypy/module/imp/interp_imp.py
++++ b/pypy/module/imp/interp_imp.py
+@@ -11,10 +11,14 @@ from pypy.interpreter.streamutil import wrap_streamerror
+ def get_suffixes(space):
+     suffixes_w = []
+     if importing.has_so_extension(space):
+-        suffixes_w.append(
++        suffixes_w.extend([
+             space.newtuple([space.newtext(importing.get_so_extension(space)),
+                             space.newtext('rb'),
+-                            space.newint(importing.C_EXTENSION)]))
++                            space.newint(importing.C_EXTENSION)]),
++            space.newtuple([space.newtext(importing.get_so_extension(space, False)),
++                            space.newtext('rb'),
++                            space.newint(importing.C_EXTENSION)]),
++            ])
+     suffixes_w.extend([
+         space.newtuple([space.newtext('.py'),
+                         space.newtext('U'),
+diff --git a/pypy/module/imp/test/test_import.py b/pypy/module/imp/test/test_import.py
+index dcd0472..5c0d199 100644
+--- a/pypy/module/imp/test/test_import.py
++++ b/pypy/module/imp/test/test_import.py
+@@ -864,11 +864,12 @@ class TestAbi:
+     def test_abi_tag(self):
+         space1 = maketestobjspace(make_config(None, soabi='TEST'))
+         space2 = maketestobjspace(make_config(None, soabi=''))
++        ma = sys._multiarch
+         if sys.platform == 'win32':
+             assert importing.get_so_extension(space1) == '.TESTi.pyd'
+             assert importing.get_so_extension(space2) == '.pyd'
+         else:
+-            assert importing.get_so_extension(space1) == '.TESTi.so'
++            assert importing.get_so_extension(space1) == '.TESTi-%s.so' % ma
+             assert importing.get_so_extension(space2) == '.so'
+ 
+ def _getlong(data):
+diff --git a/pypy/module/sys/debian.py b/pypy/module/sys/debian.py
+new file mode 100644
+index 0000000..6c5fbdb
+--- /dev/null
++++ b/pypy/module/sys/debian.py
+@@ -0,0 +1,12 @@
++import os
++import sys
++
++_multiarch = getattr(getattr(sys, 'implementation', sys), '_multiarch', None)
++# Support building under the Debian buildsystem, on older releases
++if not _multiarch:
++    _multiarch = os.environ['DEB_HOST_MULTIARCH']
++del os, sys
++
++
++def get_multiarch_tuple(space):
++    return space.wrap(_multiarch)
+diff --git a/pypy/module/sys/moduledef.py b/pypy/module/sys/moduledef.py
+index 5a7d4bd..32944d6 100644
+--- a/pypy/module/sys/moduledef.py
++++ b/pypy/module/sys/moduledef.py
+@@ -2,6 +2,7 @@ from pypy.interpreter.mixedmodule import MixedModule
+ from pypy.interpreter.error import OperationError
+ from rpython.rlib.objectmodel import we_are_translated
+ from rpython.rlib import rdynload
++import os
+ import sys
+ 
+ _WIN = sys.platform == 'win32'
+@@ -100,6 +101,9 @@ class Module(MixedModule):
+         interpleveldefs['getdlopenflags'] = 'system.getdlopenflags'
+         interpleveldefs['setdlopenflags'] = 'system.setdlopenflags'
+ 
++    if hasattr(sys, '_multiarch') or os.environ.get('DEB_HOST_MULTIARCH'):
++        interpleveldefs['_multiarch'] = 'debian.get_multiarch_tuple(space)'
++
+     appleveldefs = {
+         'excepthook'            : 'app.excepthook',
+         '__excepthook__'        : 'app.excepthook',
+diff --git a/pypy/module/sys/test/test_sysmodule.py b/pypy/module/sys/test/test_sysmodule.py
+index 30b4fac..5b901c4 100644
+--- a/pypy/module/sys/test/test_sysmodule.py
++++ b/pypy/module/sys/test/test_sysmodule.py
+@@ -150,6 +150,11 @@ class AppTestAppSysTests:
+         assert 'readonly' in str(exc.value)
+         raises(AttributeError, 'sys.flags.not_a_sys_flag = 2')
+ 
++    def test_sys_multiarch(self):
++        import sys
++        multiarch = sys._multiarch
++        assert isinstance(multiarch, str)
++
+ 
+ class AppTestSysModulePortedFromCPython:
+ 

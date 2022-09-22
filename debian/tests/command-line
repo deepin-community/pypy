@@ -1,0 +1,56 @@
+#!/bin/sh
+
+# Superficial execution tests
+
+testPrintFromStdin() {
+	stdout=$(echo 'print("Hello")' | pypy)
+	assertEquals 'Execute code from stdin' Hello "$stdout"
+}
+
+testPrintFromMinusC() {
+	stdout=$(pypy -c 'print("Hello")')
+	assertEquals 'Execute code from -c' Hello "$stdout"
+}
+
+# Stdlib
+
+testImportStdLib() {
+	pypy -c 'import os.path'
+	assertTrue 'Import os.path' $?
+}
+
+testImportTk() {
+	# Tkinter's cffi library lives in a separate binary package, to keep
+	# Depends manageable. Check that we point users to it.
+	if dpkg-query -f '${db:Status-Abbrev}\n' -W pypy-tk | grep -q ^.i; then
+		# autopkgtest can't Conflict, so we just skip if it's present
+		startSkipping
+	fi
+	stderr=$(pypy -c 'import Tkinter' 2>&1)
+	assertFalse 'Fail to import Tk when not installed' $?
+	echo "$stderr" | grep -Fq 'please install the pypy-tk package'
+	assertTrue 'Suggest installing pypy-tk' $?
+}
+
+testImportCFFI() {
+	# Are all the modules that use cffi importable?
+	# They're built separately, and often link to shared libs
+	pypy -c 'import audioop'
+	assertTrue 'Import audioop' $?
+	pypy -c 'import curses'
+	assertTrue 'Import curses' $?
+	pypy -c 'import gdbm'
+	assertTrue 'Import gdbm' $?
+	pypy -c 'import pwd, grp'
+	assertTrue 'Import pwd, grp' $?
+	pypy -c 'import ssl'
+	assertTrue 'Import ssl' $?
+	pypy -c 'import resource'
+	assertTrue 'Import resource' $?
+	pypy -c 'import sqlite3'
+	assertTrue 'Import sqlite3' $?
+	pypy -c 'import syslog'
+	assertTrue 'Import syslog' $?
+}
+
+. shunit2

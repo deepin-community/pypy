@@ -1,0 +1,6 @@
+debian/scripts/pypyclean              /usr/bin
+debian/scripts/pypycompile            /usr/bin
+include/pypy_*.h                      /usr/lib/pypy/include
+lib_pypy/_*.so                        /usr/lib/pypy/lib_pypy
+pypy/goal/libpypy-c.so                /usr/lib/pypy/bin
+pypy/goal/pypy-c                      /usr/lib/pypy/bin

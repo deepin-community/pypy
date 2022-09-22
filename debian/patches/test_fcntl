@@ -1,0 +1,38 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Thu, 24 Sep 2020 12:41:52 -0700
+Subject: Tests: Ignore lease failure in fcntl tests
+
+Fail on tmpfs on Linux 4.19. Fixed in 5.7 possibly earlier (5.3?).
+
+Forwarded: not-needed
+---
+ pypy/module/fcntl/test/test_fcntl.py | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/pypy/module/fcntl/test/test_fcntl.py b/pypy/module/fcntl/test/test_fcntl.py
+index 8c49e27..c32e0e1 100644
+--- a/pypy/module/fcntl/test/test_fcntl.py
++++ b/pypy/module/fcntl/test/test_fcntl.py
+@@ -19,6 +19,7 @@ class AppTestFcntl:
+         cls.w_tmp = cls.space.wrap(tmpprefix)
+ 
+     def test_fcntl(self):
++        import errno
+         import fcntl
+         import os
+         import sys
+@@ -111,8 +112,12 @@ class AppTestFcntl:
+ 
+             # test leases
+             assert fcntl.fcntl(f, fcntl.F_GETLEASE) == fcntl.F_UNLCK
+-            fcntl.fcntl(f, fcntl.F_SETLEASE, fcntl.F_WRLCK)
+-            assert fcntl.fcntl(f, fcntl.F_GETLEASE) == fcntl.F_WRLCK
++            try:
++                fcntl.fcntl(f, fcntl.F_SETLEASE, fcntl.F_WRLCK)
++                assert fcntl.fcntl(f, fcntl.F_GETLEASE) == fcntl.F_WRLCK
++            except IOError as e:
++                if e.errno != errno.EAGAIN:
++                    raise
+         else:
+             # this tests should fail under BSD
+             # with "Inappropriate ioctl for device"

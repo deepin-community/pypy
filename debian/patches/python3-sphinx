@@ -1,0 +1,105 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Mon, 23 Mar 2020 15:13:49 -0700
+Subject: Debian: Disable some extensions to support Python 3 Sphinx
+
+Stop building any autodoc and configuration sections, that require
+parsing the Python 2 source code.
+
+This supports building the Sphinx docs with Python 3.
+---
+ pypy/doc/conf.py                 | 10 ++--------
+ pypy/doc/config/index.rst        | 11 +++++------
+ pypy/doc/cpython_differences.rst |  2 +-
+ pypy/doc/objspace.rst            | 12 ++++++++++--
+ 4 files changed, 18 insertions(+), 17 deletions(-)
+
+diff --git a/pypy/doc/conf.py b/pypy/doc/conf.py
+index dfb203e..feb74ea 100644
+--- a/pypy/doc/conf.py
++++ b/pypy/doc/conf.py
+@@ -13,12 +13,6 @@
+ 
+ import sys, os
+ 
+-# If extensions (or modules to document with autodoc) are in another directory,
+-# add these directories to sys.path here. If the directory is relative to the
+-# documentation root, use os.path.abspath to make it absolute, like shown here.
+-sys.path.append(os.path.abspath('.'))
+-sys.path.append(os.path.abspath('../../'))
+-
+ 
+ # -- Read The Docs theme config ------------------------------------------------
+ 
+@@ -41,14 +35,14 @@ if not on_rtd:  # only import and set the theme if we're building docs locally
+ 
+ # Add any Sphinx extension module names here, as strings. They can be extensions
+ # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
+-extensions = ['sphinx.ext.autodoc',
++extensions = [# 'sphinx.ext.autodoc',
+               'sphinx.ext.doctest',
+               'sphinx.ext.extlinks',
+               'sphinx.ext.intersphinx',
+               'sphinx.ext.todo',
+               'sphinx.ext.ifconfig',
+               'sphinx.ext.graphviz',
+-              'pypyconfig',
++              # 'pypyconfig',
+               # 'sphinx_affiliates',
+              ]
+ 
+diff --git a/pypy/doc/config/index.rst b/pypy/doc/config/index.rst
+index 6282f80..eb482f1 100644
+--- a/pypy/doc/config/index.rst
++++ b/pypy/doc/config/index.rst
+@@ -52,10 +52,9 @@ with which other PyPy features:
+ .. _`What PyPy can do for your objects`: ../objspace-proxies.html
+ 
+ 
+-.. toctree::
+-    :maxdepth: 2
++.. note::
+ 
+-    commandline
+-    translation
+-    objspace
+-    opt
++   Parts of this document are not included in the Debian package.
++   See the missing sections `online`_.
++
++.. _`online`: https://doc.pypy.org/en/latest/config/index.html
+diff --git a/pypy/doc/cpython_differences.rst b/pypy/doc/cpython_differences.rst
+index 287f456..dd58770 100644
+--- a/pypy/doc/cpython_differences.rst
++++ b/pypy/doc/cpython_differences.rst
+@@ -529,7 +529,7 @@ List of extension modules that we support:
+     _locale
+     _lsprof
+     _md5
+-    :doc:`_minimal_curses <config/objspace.usemodules._minimal_curses>`
++    `_minimal_curses <https://doc.pypy.org/en/latest/config/objspace.usemodules._minimal_curses>`
+     _multiprocessing
+     _random
+     :doc:`_rawffi <discussion/ctypes-implementation>`
+diff --git a/pypy/doc/objspace.rst b/pypy/doc/objspace.rst
+index 94bcfc0..4c24a72 100644
+--- a/pypy/doc/objspace.rst
++++ b/pypy/doc/objspace.rst
+@@ -291,8 +291,16 @@ Conversions from Application Level to Interpreter Level
+    If :py:obj:`w_x` is an application-level integer or long, return an interpreter-level
+    :py:class:`rbigint`. Otherwise raise :py:exc:`TypeError`.
+ 
+-.. automethod:: pypy.interpreter.baseobjspace.ObjSpace.bytes_w(w_x)
+-.. automethod:: pypy.interpreter.baseobjspace.ObjSpace.text_w(w_x)
++.. py:function:: bytes_w(w_x)
++
++   Takes an application level :py:class:`bytes` (on PyPy2 this equals
++   `str`) and returns a rpython byte string.
++
++.. py:function:: text_w(w_x)
++
++   PyPy2 takes either a :py:class:`str` and returns a rpython byte
++   string, or it takes an :py:class:`unicode` and uses the systems
++   default encoding to return a rpython byte string.
+ 
+ .. py:function:: str_w(w_x)
+ 

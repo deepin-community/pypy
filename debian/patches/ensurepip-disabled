@@ -1,0 +1,63 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 7 Oct 2017 09:38:58 +0200
+Subject: Debian: Disable ensurepip in Debian for now
+
+Origin: Debian cpython packaging
+Last-Update: 2015-03-26
+---
+ lib-python/2.7/ensurepip/__init__.py  | 17 +++++++++++++++++
+ lib-python/2.7/test/test_ensurepip.py |  1 +
+ 2 files changed, 18 insertions(+)
+
+diff --git a/lib-python/2.7/ensurepip/__init__.py b/lib-python/2.7/ensurepip/__init__.py
+index f7fc923..e939e9c 100644
+--- a/lib-python/2.7/ensurepip/__init__.py
++++ b/lib-python/2.7/ensurepip/__init__.py
+@@ -14,6 +14,21 @@ import warnings
+ 
+ __all__ = ["version", "bootstrap"]
+ 
++def _ensurepip_is_disabled_in_debian():
++    if True:
++        print ('''\
++ensurepip is disabled in Debian/Ubuntu for the system python.
++
++Python modules For the system python are usually handled by dpkg and apt-get.
++
++    apt-get install pypy-<module name>
++
++Install the python-pip package to use pip itself.  Using pip together
++with the system python might have unexpected results for any system installed
++module, so use it on your own risk, or make sure to only use it in virtual
++environments.
++''')
++        sys.exit(1)
+ 
+ _PROJECTS = [
+     "setuptools",
+@@ -42,6 +57,7 @@ def version():
+     """
+     Returns a string specifying the bundled version of pip.
+     """
++    _ensurepip_is_disabled_in_debian()
+     whl_name = 'pip'
+     wheel_names = glob.glob('/usr/share/python-wheels/%s-*.whl' % whl_name)
+     if len(wheel_names) == 1:
+@@ -70,6 +86,7 @@ def bootstrap(root=None, upgrade=False, user=False,
+ 
+     Note that calling this function will alter both sys.path and os.environ.
+     """
++    _ensurepip_is_disabled_in_debian()
+     if altinstall and default_pip:
+         raise ValueError("Cannot use altinstall and default_pip together")
+ 
+diff --git a/lib-python/2.7/test/test_ensurepip.py b/lib-python/2.7/test/test_ensurepip.py
+index cb9d10a..e6676f6 100644
+--- a/lib-python/2.7/test/test_ensurepip.py
++++ b/lib-python/2.7/test/test_ensurepip.py
+@@ -1,4 +1,5 @@
+ import unittest
++raise unittest.SkipTest('ensurepip is disabled in debian')
+ import os
+ import os.path
+ import contextlib

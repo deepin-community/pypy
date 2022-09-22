@@ -1,0 +1,28 @@
+Tests: byte-compilation
+Depends: pypy, shunit2
+
+Tests: command-line
+Depends: pypy, shunit2
+Restrictions: superficial
+
+Tests: pypy-tk
+Depends: pypy-tk, shunit2
+Restrictions: superficial
+
+Tests: module-install-local
+Depends: build-essential, pypy-dev, pypy-setuptools, shunit2
+Restrictions: needs-root
+
+Tests: module-install-user
+Depends: build-essential, pypy-dev, pypy-setuptools, shunit2
+
+Tests: module-install-virtualenv
+Depends:
+ build-essential,
+ pypy-dev,
+ python2-pip-whl (>= 20.3.4+dfsg-4~),
+ python2-setuptools-whl,
+ python2-wheel-whl,
+ shunit2,
+ virtualenv
+Restrictions: allow-stderr

@@ -1,0 +1,26 @@
+From: Stefano Rivera <stefanor@debian.org>
+Date: Sat, 7 Oct 2017 09:38:57 +0200
+Subject: Tests: Disable test_multiprocessing
+
+It leaves stray processes.
+
+Forwarded: not-needed
+Last-Updated: 2015-02-11
+---
+ lib-python/2.7/test/test_multiprocessing.py | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/lib-python/2.7/test/test_multiprocessing.py b/lib-python/2.7/test/test_multiprocessing.py
+index 9b21ac6..36baafe 100644
+--- a/lib-python/2.7/test/test_multiprocessing.py
++++ b/lib-python/2.7/test/test_multiprocessing.py
+@@ -2,6 +2,9 @@
+ # Unit tests for the multiprocessing package
+ #
+ 
++import unittest
++raise unittest.SkipTest('This test leaves stray processes on buildds. '
++                        'Disabled for now')
+ ## FIXME: remove when https://bugs.pypy.org/issue1644 is resolved
+ import sys
+ if sys.platform.startswith('freebsd'):
